@@ -181,8 +181,10 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	assert(entry != NULL);
 
 	if (entry->enabled == false) {
+		pthread_rwlock_unlock(&mmio_rwlock);
 		return -1;
 	}
+	pthread_rwlock_unlock(&mmio_rwlock);
 
 	if (mmio_req->direction == REQUEST_READ)
 		err = mem_read(ctx, 0, paddr, (uint64_t *)&mmio_req->value,
@@ -190,8 +192,6 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	else
 		err = mem_write(ctx, 0, paddr, mmio_req->value,
 				size, &entry->mr_param);
-
-	pthread_rwlock_unlock(&mmio_rwlock);
 
 	return err;
 }
