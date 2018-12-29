@@ -144,6 +144,9 @@ SRCS += core/timer.c
 # arch
 SRCS += arch/x86/pm.c
 
+# WaaG
+SRCS += hw/vga.c
+
 # vmcfg
 SRCS += vmcfg/vmcfg.c
 SRCS += vmcfg/apl-mrb/vm1/vm1.c
