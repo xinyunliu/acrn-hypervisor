@@ -65,6 +65,7 @@ struct vmctx {
 	void *vpit;
 	void *ioc_dev;
 	void *tpm_dev;
+	void *fb_base;
 
 	/* BSP state. guest loader needs to fill it */
 	struct acrn_set_vcpu_regs bsp_regs;

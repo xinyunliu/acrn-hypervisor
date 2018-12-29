@@ -148,6 +148,7 @@ SRCS += arch/x86/pm.c
 SRCS += hw/vga.c
 SRCS += hw/rfb.c
 SRCS += hw/sockstream.c
+SRCS += hw/pci/pci_fbuf.c
 
 # vmcfg
 SRCS += vmcfg/vmcfg.c
