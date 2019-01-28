@@ -29,7 +29,7 @@ struct vpmtmr {
 
 void vpmtmr_init(struct vmctx *ctx);
 void vpmtmr_deinit(struct vmctx *ctx);
-void vpmtmr_event_handler(void *arg);
+void vpmtmr_event_handler(void *arg, uint64_t nexp);
 void set_pmtmr_val(struct vpmtmr *vpmtmr, uint32_t val);
 uint32_t get_pmtmr_val(struct vpmtmr *vpmtmr);
 

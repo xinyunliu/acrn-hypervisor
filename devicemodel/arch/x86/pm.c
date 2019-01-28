@@ -42,6 +42,7 @@
 #include "acpi.h"
 #include "inout.h"
 #include "mevent.h"
+#include "pmtimer.h"
 #include "irq.h"
 #include "lpc.h"
 
@@ -206,7 +207,7 @@ pm1_enable_handler(struct vmctx *ctx, int vcpu, int in, int port, int bytes,
 		 * the global lock, but ACPI-CA whines profusely if it
 		 * can't set GBL_EN.
 		 */
-		pm1_enable = *eax & (PM1_RTC_EN | PM1_PWRBTN_EN | PM1_GBL_EN);
+		pm1_enable = *eax & (PM1_RTC_EN | PM1_PWRBTN_EN | PM1_GBL_EN | PM1_TMR_EN);
 		sci_update(ctx);
 	}
 	pthread_mutex_unlock(&pm_lock);
@@ -296,6 +297,36 @@ pm1_control_handler(struct vmctx *ctx, int vcpu, int in, int port, int bytes,
 }
 INOUT_PORT(pm1_control, PM1A_CNT_ADDR, IOPORT_F_INOUT, pm1_control_handler);
 SYSRES_IO(PM1A_EVT_ADDR, 8);
+
+void
+vpmtmr_event_handler(void *arg, uint64_t nexp)
+{
+	struct vpmtmr *vpmtmr;
+
+	vpmtmr = arg;
+
+	pthread_mutex_lock(&pm_lock);
+	if ((pm1_control & PM1_SCI_EN) != 0) {
+		pm1_status |= PM1_TMR_STS;
+		sci_update(vpmtmr->vm);
+		pm1_status &= ~PM1_TMR_STS;
+	}
+	pthread_mutex_unlock(&pm_lock);
+
+	pthread_mutex_lock(&vpmtmr->mtx);
+	/* Per ACPI spec, pmtmr interrupt event occurs when
+	 * MSB of pmtmr value changes from 0 to 1 or 1 to 0,
+	 * so need to flip this bit when timer expired.
+	 */
+	vpmtmr->msb_is_set = !(vpmtmr->msb_is_set);
+
+	if (vpmtmr->msb_is_set)
+		set_pmtmr_val(vpmtmr, PMTMR_CARRY_MASK);
+	else
+		set_pmtmr_val(vpmtmr, 0);
+
+	pthread_mutex_unlock(&vpmtmr->mtx);
+}
 
 /*
  * ACPI SMI Command Register
