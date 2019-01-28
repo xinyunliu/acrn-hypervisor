@@ -38,8 +38,6 @@
 #define	PM1A_EVT_ADDR		0x400
 #define	PM1A_CNT_ADDR		0x404
 
-#define	IO_PMTMR		0x408	/* 4-byte i/o port for the timer */
-
 /* All dynamic table entry no. */
 #define NHLT_ENTRY_NO		8
 #define PSDS_ENTRY_NO		10

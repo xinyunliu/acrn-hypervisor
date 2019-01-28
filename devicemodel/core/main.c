@@ -56,6 +56,7 @@
 #include "smbiostbl.h"
 #include "rtc.h"
 #include "pit.h"
+#include "pmtimer.h"
 #include "hpet.h"
 #include "version.h"
 #include "sw_load.h"
@@ -446,6 +447,7 @@ vm_init_vdevs(struct vmctx *ctx)
 	pci_irq_init(ctx);
 	atkbdc_init(ctx);
 	ioapic_init(ctx);
+	vpmtmr_init(ctx);
 
 	/*
 	 * We don't care ioc_init return value so far.
@@ -498,6 +500,7 @@ vrtc_fail:
 	atkbdc_deinit(ctx);
 	pci_irq_deinit(ctx);
 	ioapic_deinit();
+	vpmtmr_deinit(ctx);
 	return -1;
 }
 
@@ -512,6 +515,7 @@ vm_deinit_vdevs(struct vmctx *ctx)
 
 	vhpet_deinit(ctx);
 	vpit_deinit(ctx);
+	vpmtmr_deinit(ctx);
 	vrtc_deinit(ctx);
 	ioc_deinit(ctx);
 	atkbdc_deinit(ctx);

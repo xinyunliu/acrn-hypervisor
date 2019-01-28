@@ -68,6 +68,7 @@
 #include "tpm.h"
 #include "vmmapi.h"
 #include "hpet.h"
+#include "pmtimer.h"
 
 /*
  * Define the base address of the ACPI tables, and the offsets to
@@ -367,8 +368,10 @@ basl_fwrite_fadt(FILE *fp, struct vmctx *ctx)
 	    PM1A_CNT_ADDR);
 	EFPRINTF(fp, "[0004]\t\tPM1B Control Block Address : 00000000\n");
 	EFPRINTF(fp, "[0004]\t\tPM2 Control Block Address : 00000000\n");
-	EFPRINTF(fp, "[0004]\t\tPM Timer Block Address : %08X\n",
-	    IO_PMTMR);
+	EFPRINTF(fp, "[0004]\t\tPM Timer Block Address :");
+	assert(ctx->vpmtmr != NULL);
+	EFPRINTF(fp, "%08X\n", ((struct vpmtmr *)(ctx->vpmtmr))->io_addr);
+
 	EFPRINTF(fp, "[0004]\t\tGPE0 Block Address : 00000000\n");
 	EFPRINTF(fp, "[0004]\t\tGPE1 Block Address : 00000000\n");
 	EFPRINTF(fp, "[0001]\t\tPM1 Event Block Length : 04\n");
@@ -405,7 +408,8 @@ basl_fwrite_fadt(FILE *fp, struct vmctx *ctx)
 	EFPRINTF(fp, "\t\t\tControl Method Sleep Button (V1) : 1\n");
 	EFPRINTF(fp, "\t\t\tRTC wake not in fixed reg space (V1) : 0\n");
 	EFPRINTF(fp, "\t\t\tRTC can wake system from S4 (V1) : 0\n");
-	EFPRINTF(fp, "\t\t\t32-bit PM Timer (V1) : 1\n");
+	EFPRINTF(fp, "\t\t\t32-bit PM Timer (V1) : %d\n",
+		PMTMR_32BIT ? 1 : 0);
 	EFPRINTF(fp, "\t\t\tDocking Supported (V1) : 0\n");
 	EFPRINTF(fp, "\t\t\tReset Register Supported (V2) : 1\n");
 	EFPRINTF(fp, "\t\t\tSealed Case (V3) : 0\n");
