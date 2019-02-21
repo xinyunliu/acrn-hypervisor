@@ -322,6 +322,14 @@ static void init_exec_ctrl(struct acrn_vcpu *vcpu)
 	 */
 	value32 &= ~VMX_PROCBASED_CTLS_INVLPG;
 
+	/* workaround for apicv tpr shadow bug */
+	if (!is_apicv_intr_delivery_supported()) {
+		value32 &= ~VMX_PROCBASED_CTLS_TPR_SHADOW;
+		value32 |= VMX_PROCBASED_CTLS_CR8_LOAD;
+		value32 |= VMX_PROCBASED_CTLS_CR8_STORE;
+		pr_err("%s: disable tpr shadow: 0x%x ", __func__, value32);
+	}
+
 	exec_vmwrite32(VMX_PROC_VM_EXEC_CONTROLS, value32);
 	pr_dbg("VMX_PROC_VM_EXEC_CONTROLS: 0x%x ", value32);
 
