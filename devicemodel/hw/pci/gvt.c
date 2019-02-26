@@ -241,9 +241,9 @@ pci_gvt_init(struct vmctx *ctx, struct pci_vdev *pi, char *opts)
 	}
 
 	gvt->addr.domain = 0;
-	gvt->addr.bus = pi->bus;
-	gvt->addr.slot = pi->slot;
-	gvt->addr.function = pi->func;
+	gvt->addr.bus = 0;
+	gvt->addr.slot = 2;
+	gvt->addr.function = 0;
 
 	pi->arg = gvt;
 	gvt->gvt_pi = pi;
