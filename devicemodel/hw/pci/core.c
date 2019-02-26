@@ -128,6 +128,16 @@ CFGREAD(struct pci_vdev *dev, int coff, int bytes)
 		return pci_get_cfgdata32(dev, coff);
 }
 
+static inline int
+is_pci_gvt(struct pci_vdev *dev)
+{
+	if (dev == NULL || strncmp(dev->dev_ops->class_name, "pci-gvt",7)) {
+		return 0;
+	}
+	else
+		return 1;
+}
+
 /*
  * I/O access
  */
@@ -494,6 +504,10 @@ modify_bar_registration(struct pci_vdev *dev, int idx, int registration)
 	struct inout_port iop;
 	struct mem_range mr;
 
+	if (is_pci_gvt(dev)) {
+		fprintf(stdout, "modify_bar_registration() bypass for pci-gvt\n");
+		return;
+	}
 	switch (dev->bar[idx].type) {
 	case PCIBAR_IO:
 		bzero(&iop, sizeof(struct inout_port));
