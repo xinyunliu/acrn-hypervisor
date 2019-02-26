@@ -128,6 +128,25 @@ CFGREAD(struct pci_vdev *dev, int coff, int bytes)
 		return pci_get_cfgdata32(dev, coff);
 }
 
+
+static inline int
+is_pci_type(struct pci_vdev *dev, uint8_t c, uint8_t sc)
+{
+    uint8_t class, subclass;
+
+	if (dev == NULL)
+		return 0;
+
+	class = pci_get_cfgdata8(dev, PCIR_CLASS);
+	subclass = pci_get_cfgdata8(dev, PCIR_SUBCLASS);
+
+	if(class==c && subclass ==sc)  {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 /*
  * I/O access
  */
@@ -494,6 +513,11 @@ modify_bar_registration(struct pci_vdev *dev, int idx, int registration)
 	struct inout_port iop;
 	struct mem_range mr;
 
+	if (is_pci_type(dev, 3, 0))
+	{
+		printf(" [xyl] modify_bar_registration() bypass and return\n");
+		return;
+	}
 	switch (dev->bar[idx].type) {
 	case PCIBAR_IO:
 		bzero(&iop, sizeof(struct inout_port));
