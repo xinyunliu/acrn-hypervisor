@@ -21,3 +21,7 @@ ramoops.mem_size=0x400000
 ramoops.console_size=0x200000
 reboot_panic=p,w
 panic_print=0x1f
+dyndbg="file *gvt* +p"
+drm.debug=0x6
+i915.enable_conformance_check=0
+nox2apic
