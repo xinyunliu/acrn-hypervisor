@@ -116,12 +116,12 @@ gvt_init_config(struct pci_gvt *gvt)
 	}
 
 	/* initialize config space */
-	pci_set_cfgdata16(gvt->gvt_pi, PCIR_VENDOR, *(uint16_t *)&gvt->host_config[0]);
-	pci_set_cfgdata16(gvt->gvt_pi, PCIR_DEVICE, *(uint16_t *)&gvt->host_config[0x02]);
+	pci_set_cfgdata16(gvt->gvt_pi, PCIR_VENDOR, gvt->host_config[0]);
+	pci_set_cfgdata16(gvt->gvt_pi, PCIR_DEVICE, gvt->host_config[0x02]);
 	/* status */
-	pci_set_cfgdata16(gvt->gvt_pi, PCIR_STATUS, *(uint16_t *)&gvt->host_config[0x06]);
+	pci_set_cfgdata16(gvt->gvt_pi, PCIR_STATUS, gvt->host_config[0x06]);
 	/* revision id */
-	pci_set_cfgdata16(gvt->gvt_pi, PCIR_REVID, *(uint16_t *)&gvt->host_config[0x08]);
+	pci_set_cfgdata16(gvt->gvt_pi, PCIR_REVID, gvt->host_config[0x08]);
 	/* class and sub class */
 	pci_set_cfgdata8(gvt->gvt_pi, PCIR_CLASS, PCIC_DISPLAY);
 	pci_set_cfgdata8(gvt->gvt_pi, PCIR_SUBCLASS, PCIS_DISPLAY_VGA);
@@ -130,20 +130,20 @@ gvt_init_config(struct pci_gvt *gvt)
 	cap_ptr = gvt->host_config[0x34];
 	while (cap_ptr != 0) {
 		pci_set_cfgdata32(gvt->gvt_pi, cap_ptr,
-			*(uint32_t *)&gvt->host_config[cap_ptr]);
+			gvt->host_config[cap_ptr]);
 		pci_set_cfgdata32(gvt->gvt_pi, cap_ptr + 4,
-			*(uint32_t *)&gvt->host_config[cap_ptr + 4]);
+			gvt->host_config[cap_ptr + 4]);
 		pci_set_cfgdata32(gvt->gvt_pi, cap_ptr + 8,
-			*(uint32_t *)&gvt->host_config[cap_ptr + 8]);
+			gvt->host_config[cap_ptr + 8]);
 		pci_set_cfgdata32(gvt->gvt_pi, cap_ptr + 12,
-			*(uint32_t *)&gvt->host_config[cap_ptr + 12]);
+			gvt->host_config[cap_ptr + 12]);
 		cap_ptr = gvt->host_config[cap_ptr + 1];
 	}
 
 	/* SNB: processor graphics control register */
-	pci_set_cfgdata16(gvt->gvt_pi, 0x50, *(uint16_t *)&gvt->host_config[0x50]);
+	pci_set_cfgdata16(gvt->gvt_pi, 0x50, gvt->host_config[0x50]);
 	/* processor graphics control register */
-	pci_set_cfgdata16(gvt->gvt_pi, 0x52, *(uint16_t *)&gvt->host_config[0x52]);
+	pci_set_cfgdata16(gvt->gvt_pi, 0x52, gvt->host_config[0x52]);
 
 	ret = pci_emul_alloc_bar(gvt->gvt_pi, 0, PCIBAR_MEM32,
 		16 * 1024 * 1024);
