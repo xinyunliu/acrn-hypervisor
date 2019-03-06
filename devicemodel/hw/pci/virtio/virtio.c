@@ -1235,7 +1235,7 @@ virtio_common_cfg_read(struct pci_vdev *dev, uint64_t offset, int size)
 	value = size == 1 ? 0xff : size == 2 ? 0xffff : 0xffffffff;
 
 	cr = virtio_find_modern_cr(offset);
-	if (cr == NULL || cr->size != size) {
+	if (cr == NULL /* || cr->size != size */) {
 		if (cr != NULL) {
 			/* offset must be OK, so size must be bad */
 			fprintf(stderr,
@@ -1351,7 +1351,7 @@ virtio_common_cfg_write(struct pci_vdev *dev, uint64_t offset, int size,
 	name = vops->name;
 
 	cr = virtio_find_modern_cr(offset);
-	if (cr == NULL || cr->size != size || cr->ro) {
+	if (cr == NULL /* || cr->size != size */ || cr->ro) {
 		if (cr != NULL) {
 			/* offset must be OK, wrong size and/or reg is R/O */
 			if (cr->size != size)
