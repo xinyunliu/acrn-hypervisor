@@ -424,6 +424,12 @@ pci_lpc_init(struct vmctx *ctx, struct pci_vdev *pi, char *opts)
 	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_BRIDGE);
 	pci_set_cfgdata8(pi, PCIR_SUBCLASS, PCIS_BRIDGE_ISA);
 
+	pci_set_cfgdata16(pi, 0x00, 0x8086);
+	pci_set_cfgdata16(pi, 0x02, 0x9d4e);
+	pci_set_cfgdata8(pi, 0x08, 0x21);
+	pci_set_cfgdata16(pi, 0x2c, 0x8086);
+	pci_set_cfgdata16(pi, 0x2e, 0x2070);
+
 	lpc_bridge = pi;
 
 	return 0;

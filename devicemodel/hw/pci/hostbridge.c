@@ -38,6 +38,10 @@ pci_hostbridge_init(struct vmctx *ctx, struct pci_vdev *pi, char *opts)
 	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_BRIDGE);
 	pci_set_cfgdata8(pi, PCIR_SUBCLASS, PCIS_BRIDGE_HOST);
 
+	pci_set_cfgdata8(pi, 0x08, 0x0b);
+	pci_set_cfgdata16(pi, 0x2c, 0x0000);
+	pci_set_cfgdata16(pi, 0x2e, 0x0000);
+
 	pci_emul_add_pciecap(pi, PCIEM_TYPE_ROOT_PORT);
 
 	return 0;
