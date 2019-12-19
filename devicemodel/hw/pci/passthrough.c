@@ -541,6 +541,7 @@ cfginitbar(struct vmctx *ctx, struct passthru_dev *ptdev)
 	uint64_t base, size;
 
 	dev = ptdev->dev;
+	dev->is_pt = 1;
 
 	/*
 	 * Initialize BAR registers
@@ -566,6 +567,10 @@ cfginitbar(struct vmctx *ctx, struct passthru_dev *ptdev)
 				break;
 			}
 			base = bar.base & PCIM_BAR_MEM_BASE;
+			/* use the prefetch attribute from Passthrough device and
+			 * always allocate BAR from 32-bit
+			 */
+			dev->bar[i].pt_derived_type = bar.base & PCIM_BAR_ATTR_MASK;
 		}
 		size = bar.length;
 

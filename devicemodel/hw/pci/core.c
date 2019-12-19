@@ -770,6 +770,16 @@ pci_emul_alloc_pbar(struct pci_vdev *pdi, int idx, uint64_t hostbase,
 			size = 16;
 	}
 
+	if (pdi->is_pt) {
+		/* the BAR addr is only allocated in 32-bit range for
+		 * pt-type
+		 */
+		if (type == PCIBAR_MEM64) {
+			type = PCIBAR_MEM32;
+			pci_set_cfgdata32(pdi, PCIR_BAR(idx + 1), 0);
+		}
+	}
+
 	switch (type) {
 	case PCIBAR_NONE:
 		baseptr = NULL;
@@ -819,6 +829,9 @@ pci_emul_alloc_pbar(struct pci_vdev *pdi, int idx, uint64_t hostbase,
 		limit = PCI_EMUL_MEMLIMIT32;
 		mask = PCIM_BAR_MEM_BASE;
 		lobits = PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_32;
+		if (pdi->is_pt) {
+			lobits = pdi->bar[idx].pt_derived_type;
+		}
 		break;
 	default:
 		pr_err("%s: invalid bar type %d\n", __func__, type);
@@ -2361,8 +2374,11 @@ pci_cfgrw(struct vmctx *ctx, int vcpu, int in, int bus, int slot, int func,
 				break;
 			case PCIBAR_MEM32:
 				addr = bar = *eax & mask;
-				bar |= PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_32;
-				if (addr != dev->bar[idx].addr) {
+				if (dev->is_pt) {
+					bar |= dev->bar[idx].pt_derived_type;
+				} else
+					bar |= PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_32;
+				if ((*eax != 0xffffffff) && (addr != dev->bar[idx].addr)) {
 					update_bar_address(ctx, dev, addr, idx,
 							   PCIBAR_MEM32,
 							   ignore_reg_unreg);

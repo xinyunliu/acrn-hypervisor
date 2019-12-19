@@ -112,6 +112,7 @@ struct pcibar {
 	uint64_t		size;
 	uint64_t		addr;
 	bool			sizing;
+	uint64_t		pt_derived_type;
 };
 
 #define PI_NAMESZ	40
@@ -178,6 +179,7 @@ struct pci_vdev {
 
 	uint8_t	cfgdata[PCI_REGMAX + 1];
 	struct pcibar bar[PCI_BARMAX + 1];
+	int  is_pt;
 };
 
 struct gsi_dev {
