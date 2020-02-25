@@ -656,6 +656,93 @@ static int32_t set_vm_memory_region(struct acrn_vm *vm,
 	return ret;
 }
 
+#include <io.h>
+static int32_t gpu_mmio_page[4096] = {0};
+
+//DEBUG_SUN: GPU MMIO trap handler
+int32_t gpu_mmio_access_handler(struct io_request *io_req, void *handler_private_data)
+{
+	struct mmio_request *mmio = &io_req->reqs.mmio;
+	int32_t ret = 0;
+	uint64_t offset, gpu_bar0;
+	void *hva;
+
+	gpu_bar0 = (uint64_t)handler_private_data;
+	offset = mmio->address - gpu_bar0 - 0x9000;
+
+	pr_err("%s, bar0:%lx mmio_addr:%lx offset:%x", __func__, gpu_bar0,mmio->address,offset);
+
+	if ((offset>0) && (offset<4096))
+		gpu_mmio_page[offset]++;
+	else
+		pr_err("offset:%x error\n",offset);
+
+	hva = hpa2hva(mmio->address);
+	/* Only DWORD and QWORD are permitted */
+	if ((mmio->size != 4U) && (mmio->size != 8U)) {
+		pr_err("%s, size:%x is not allowed", __func__, mmio->size);
+		ret = -EINVAL;
+	} else if (hva != NULL) {
+		stac();
+		if (mmio->direction == REQUEST_READ) {
+			/* mmio->size is either 4U or 8U */
+			if (mmio->size == 4U) {
+				mmio->value = (uint64_t)mmio_read32((const void *)hva);
+			} else {
+				mmio->value = mmio_read64((const void *)hva);
+			}
+			pr_err("DEBUG_SUN: Read GPU mmio(0x%x)=0x%x", offset, mmio->value);
+		} else {
+			/* mmio->size is either 4U or 8U */
+			if (mmio->size == 4U) {
+				mmio_write32((uint32_t)(mmio->value), (void *)hva);
+			} else {
+				mmio_write64(mmio->value, (void *)hva);
+			}
+			pr_err("DEBUG_SUN: Write GPU mmio(0x%x)=0x%x", offset, mmio->value);
+		}
+		clac();
+	} else {
+		/* No other state currently, do nothing */
+	}
+
+	return ret;
+}
+//DEBUG_SUN_E
+
+int set_trap_page(struct acrn_vm *vm, uint64_t gpu_mmio_base) {
+	uint64_t addr_hi, addr_lo, gpu_bar0;
+
+	gpu_bar0 = gpu_mmio_base;
+	addr_lo = gpu_bar0 + 0x9008;
+	addr_hi = gpu_bar0 + 0x900c;
+	addr_lo = round_page_down(addr_lo);
+	addr_hi = round_page_up(addr_hi);
+	register_mmio_emulation_handler(vm, gpu_mmio_access_handler,
+			addr_lo, addr_hi, (void*)gpu_bar0);
+	ept_del_mr(vm, (uint64_t *)vm->arch_vm.nworld_eptp,
+			addr_lo, addr_hi - addr_lo);
+	pr_err("DEBUG_SUN: Trap GPU setup MMIO, bar->base:0x%x", gpu_bar0);
+	return 0;
+}
+
+int unset_trap_page(struct acrn_vm *vm, uint64_t gpu_mmio_base) {
+	uint64_t addr_hi, addr_lo, gpu_bar0;
+	gpu_bar0 = gpu_mmio_base;
+	addr_lo = gpu_bar0 + 0x9000;
+	addr_hi = gpu_bar0 + 0x9fff;
+	addr_lo = round_page_down(addr_lo);
+	addr_hi = round_page_up(addr_hi);
+	unregister_mmio_emulation_handler(vm, addr_lo, addr_hi);
+	pr_err("DEBUG_SUN: Untrap GPU MMIO page, bar->base:0x%x", gpu_bar0);
+	for(int i = 0; i < 4096; i++) {
+		if (gpu_mmio_page[i])
+			pr_err("DEBUG_SUN: MMIO[0x%x] hit(%d)", (0x9000+i),
+					gpu_mmio_page[i]);
+	}
+	return 0;
+}
+
 /**
  * @brief setup ept memory mapping for multi regions
  *
