@@ -657,30 +657,41 @@ static int32_t set_vm_memory_region(struct acrn_vm *vm,
 }
 
 #include <io.h>
-static int32_t gpu_mmio_page[4096] = {0};
+static int32_t gpu_mmio_page_read[4096] = {0};
+static int32_t gpu_mmio_page_write[4096] = {0};
+static int64_t gpu_mmio_base = 0x100000000UL;
+static int32_t need_remove = 0;
 
-//DEBUG_SUN: GPU MMIO trap handler
 int32_t gpu_mmio_access_handler(struct io_request *io_req, void *handler_private_data)
 {
 	struct mmio_request *mmio = &io_req->reqs.mmio;
 	int32_t ret = 0;
-	uint64_t offset, gpu_bar0;
+	uint64_t offset, mmio_base;
 	void *hva;
 
-	gpu_bar0 = (uint64_t)handler_private_data;
-	offset = mmio->address - gpu_bar0 - 0x9000;
+	mmio_base = (uint64_t)handler_private_data;
+	offset = mmio->address - mmio_base;
 
-	pr_err("%s, bar0:%lx mmio_addr:%lx offset:%x", __func__, gpu_bar0,mmio->address,offset);
+	pr_err("%s, bar0:%lx mmio_addr:%lx offset:%x", __func__, mmio_base, mmio->address, offset);
 
-	if ((offset>0) && (offset<4096))
-		gpu_mmio_page[offset]++;
-	else
-		pr_err("offset:%x error\n",offset);
+	if (mmio->direction == REQUEST_READ) {
+		pr_err("DEBUG_SUN: Read GPU mmio: offset=%d value=0x%x", offset, mmio->value);
+		if (offset < 4096)
+			gpu_mmio_page_read[offset]++;
+		else
+			pr_err("Read: ERROR OFFSET! 0x%x\n", offset);
+	} else {
+		pr_err("DEBUG_SUN: Write GPU mmio: offset=%d value=%x%x", offset, mmio->value);
+		if (offset < 4096)
+			gpu_mmio_page_write[offset]++;
+		else
+			pr_err("Write: ERROR OFFSET! 0x%x\n", offset);
+	}
 
 	hva = hpa2hva(mmio->address);
 	/* Only DWORD and QWORD are permitted */
 	if ((mmio->size != 4U) && (mmio->size != 8U)) {
-		pr_err("%s, size:%x is not allowed", __func__, mmio->size);
+		pr_err("%s, Only DWORD and QWORD are permitted", __func__);
 		ret = -EINVAL;
 	} else if (hva != NULL) {
 		stac();
@@ -691,7 +702,6 @@ int32_t gpu_mmio_access_handler(struct io_request *io_req, void *handler_private
 			} else {
 				mmio->value = mmio_read64((const void *)hva);
 			}
-			pr_err("DEBUG_SUN: Read GPU mmio(0x%x)=0x%x", offset, mmio->value);
 		} else {
 			/* mmio->size is either 4U or 8U */
 			if (mmio->size == 4U) {
@@ -699,7 +709,6 @@ int32_t gpu_mmio_access_handler(struct io_request *io_req, void *handler_private
 			} else {
 				mmio_write64(mmio->value, (void *)hva);
 			}
-			pr_err("DEBUG_SUN: Write GPU mmio(0x%x)=0x%x", offset, mmio->value);
 		}
 		clac();
 	} else {
@@ -708,7 +717,6 @@ int32_t gpu_mmio_access_handler(struct io_request *io_req, void *handler_private
 
 	return ret;
 }
-//DEBUG_SUN_E
 
 int set_trap_page(struct acrn_vm *vm, uint64_t gpu_mmio_base) {
 	uint64_t addr_hi, addr_lo, gpu_bar0;
@@ -722,27 +730,42 @@ int set_trap_page(struct acrn_vm *vm, uint64_t gpu_mmio_base) {
 			addr_lo, addr_hi, (void*)gpu_bar0);
 	ept_del_mr(vm, (uint64_t *)vm->arch_vm.nworld_eptp,
 			addr_lo, addr_hi - addr_lo);
-	pr_err("DEBUG_SUN: Trap GPU setup MMIO, bar->base:0x%x", gpu_bar0);
+	need_remove = 1;
+	pr_err("DEBUG_SUN: Trap GPU setup MMIO, bar->base:0x%lx, trap[0x%lx~0x%lx]",
+						gpu_bar0, addr_lo, addr_hi);
 	return 0;
 }
 
 int unset_trap_page(struct acrn_vm *vm, uint64_t gpu_mmio_base) {
 	uint64_t addr_hi, addr_lo, gpu_bar0;
+
 	gpu_bar0 = gpu_mmio_base;
-	addr_lo = gpu_bar0 + 0x9000;
-	addr_hi = gpu_bar0 + 0x9fff;
+	addr_lo = gpu_bar0 + 0x9008;
+	addr_hi = gpu_bar0 + 0x900c;
 	addr_lo = round_page_down(addr_lo);
 	addr_hi = round_page_up(addr_hi);
-	unregister_mmio_emulation_handler(vm, addr_lo, addr_hi);
-	pr_err("DEBUG_SUN: Untrap GPU MMIO page, bar->base:0x%x", gpu_bar0);
-	for(int i = 0; i < 4096; i++) {
-		if (gpu_mmio_page[i])
-			pr_err("DEBUG_SUN: MMIO[0x%x] hit(%d)", (0x9000+i),
-					gpu_mmio_page[i]);
-	}
-	return 0;
-}
 
+	if (need_remove == 0)
+		return 0;
+
+	unregister_mmio_emulation_handler(vm, addr_lo, addr_hi);
+	pr_err("DEBUG_SUN: Untrap GPU MMIO page, bar->base:0x%lx, trap[0x%lx~0x%lx]",
+			gpu_bar0, addr_lo, addr_hi);
+
+	for(int i = 0; i < 4096; i++) {
+		if (gpu_mmio_page_read[i]) {
+			pr_err("DEBUG_SUN: Read MMIO[0x%x] hit(%d)", (addr_lo+i),
+					gpu_mmio_page_read[i]);
+		}
+		if (gpu_mmio_page_write[i]) {
+			pr_err("DEBUG_SUN: Write MMIO[0x%x] hit(%d)", (addr_lo+i),
+					gpu_mmio_page_write[i]);
+		}
+	}
+
+	return 0;
+
+}
 /**
  * @brief setup ept memory mapping for multi regions
  *
@@ -964,6 +987,11 @@ int32_t hcall_deassign_ptdev(struct acrn_vm *vm, uint16_t vmid, uint64_t param)
 	if (!is_poweroff_vm(target_vm) && is_postlaunched_vm(target_vm)) {
 		bdf.value = (uint16_t)param;
 		ret = move_pt_device(target_vm->iommu, vm->iommu, bdf.fields.bus, bdf.fields.devfun);
+			//DEBUG_SUN: Untrap GPU mmio
+			if ((bdf.bits.b==0) && (bdf.bits.d==2) && (bdf.bits.f==0)) {
+				unset_trap_page(vm, gpu_mmio_base);
+			}
+
 	}
 
 	return ret;
@@ -1005,6 +1033,10 @@ int32_t hcall_set_ptdev_intr_info(struct acrn_vm *vm, uint16_t vmid, uint64_t pa
 			} else {
 				pr_err("%s: Invalid irq type: %u or MSIX vector count: %u\n",
 						__func__, irq.type, irq.is.msix.vector_cnt);
+			}
+			//DEBUG_SUN: Set trap mmio register for GPU(0:2.0)
+			if (irq.virt_bdf == 0x10) {
+				set_trap_page(vm, gpu_mmio_base);
 			}
 		}
 	}
