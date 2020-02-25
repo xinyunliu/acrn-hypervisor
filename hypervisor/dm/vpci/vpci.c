@@ -378,6 +378,10 @@ static int32_t vpci_write_pt_dev_cfg(struct pci_vdev *vdev, uint32_t offset,
 		uint32_t bytes, uint32_t val)
 {
 	if (vbar_access(vdev, offset)) {
+		if (vdev->bdf.bits.b ==0 && vdev->bdf.bits.d ==2)
+			pr_err("[xyl] pt_dev_cfg_write() (%x:%x:%x) offset:0x%x val:%x\n",
+				vdev->bdf.bits.b,vdev->bdf.bits.d,vdev->bdf.bits.f,
+				offset, val);
 		/* bar write access must be 4 bytes and offset must also be 4 bytes aligned */
 		if ((bytes == 4U) && ((offset & 0x3U) == 0U)) {
 			vdev_pt_write_vbar(vdev, pci_bar_index(offset), val);
@@ -406,6 +410,9 @@ static int32_t vpci_read_pt_dev_cfg(const struct pci_vdev *vdev, uint32_t offset
 		} else {
 			*val = ~0U;
 		}
+		if (vdev->bdf.bits.b ==0 && vdev->bdf.bits.d ==2)
+			pr_err("[xyl] pt_dev_cfg_read() (%x:%x:%x) offset:0x%x val:%x\n",
+				vdev->bdf.bits.b,vdev->bdf.bits.d,vdev->bdf.bits.f, offset, *val);
 	} else if (msicap_access(vdev, offset)) {
 		vmsi_read_cfg(vdev, offset, bytes, val);
 	} else if (msixcap_access(vdev, offset)) {

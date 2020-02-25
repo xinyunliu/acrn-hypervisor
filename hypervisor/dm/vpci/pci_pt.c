@@ -91,6 +91,9 @@ static void vdev_pt_map_mem_vbar(struct pci_vdev *vdev, uint32_t idx)
 	struct acrn_vm *vm = vdev->vpci->vm;
 
 	vbar = &vdev->vbars[idx];
+	pr_err("[xyl] map_vbar() (%x:%x:%x) base:0x%lx size:%lx\n",
+			vdev->bdf.bits.b,vdev->bdf.bits.d,vdev->bdf.bits.f,
+			vbar->base, vbar->size);
 
 	if (vbar->base != 0UL) {
 		ept_add_mr(vm, (uint64_t *)(vm->arch_vm.nworld_eptp),
