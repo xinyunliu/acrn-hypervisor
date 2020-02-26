@@ -1315,7 +1315,7 @@ passthru_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 	if (baridx == ptdev_msix_table_bar(ptdev)) {
 		msix_table_write(ptdev, offset, size, value);
 	} else if (baridx == 0) {
-		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
+		pr_notice("passthru_write bar= %d offset=0x%lx, size=%d value:%lx\n", baridx, offset, size, value);
 		igd_mmio_write(ptdev, offset, size, value);
 	}else {
 		/* TODO: Add support for IO BAR of PTDev */
@@ -1335,9 +1335,8 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 	if (baridx == ptdev_msix_table_bar(ptdev)) {
 		val = msix_table_read(ptdev, offset, size);
 	} else if (baridx == 0) {
-		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
-
 		val = igd_mmio_read(ptdev, offset, size);
+		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d value:%lx \n", baridx, offset, size, val);
 	} else {
 
 		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
