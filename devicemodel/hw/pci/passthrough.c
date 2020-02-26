@@ -111,6 +111,10 @@ struct passthru_dev {
 		int		table_offset;		/* page aligned */
 		bool		ptirq_allocated;
 	} msix;
+	struct {
+		int table_size;
+		void * table_pages;
+	}igd_mmio;
 	bool pcie_cap;
 	struct pcisel sel;
 	int phys_pin;
@@ -534,6 +538,87 @@ deinit_msix_table(struct vmctx *ctx, struct passthru_dev *ptdev)
 	}
 }
 
+
+/* only will called for "0:2:0  bar[0]" */
+/* [start,start +9k), [start+9k, start+10k), [start+10k, end) */
+
+
+static int
+init_igd_mmio(struct vmctx *ctx, struct passthru_dev *ptdev, uint64_t base)
+{
+	int b, s, f;
+	int error;
+	size_t len;
+	struct pci_vdev *dev = ptdev->dev;
+	vm_paddr_t start;
+	size_t table_size;
+
+	b = ptdev->sel.bus;
+	s = ptdev->sel.dev;
+	f = ptdev->sel.func;
+
+	start = dev->bar[0].addr;
+	len = dev->bar[0].size;
+
+	warnx("igd map mmio range on %x/%x/%x  0x%lx@%lx", b,s,f, start,len);
+
+	table_size = roundup2(2*1024*1024, 4096);
+
+	error = pci_device_map_range(ptdev->phys_dev, base, table_size,
+		PCI_DEV_MAP_FLAG_WRITABLE, &ptdev->igd_mmio.table_pages);
+	if (error) {
+		warnx("Failed to map igd mmio range on %x/%x/%x", b,s,f);
+		return error;
+	}
+
+	error = vm_map_ptdev_mmio(ctx, b, s, f, start, len, base);
+	if (error) {
+		warnx("Failed to map igd BAR[0] passthru pages on %x/%x/%x", b,s,f);
+		return error;
+	}
+
+	error = vm_unmap_ptdev_mmio(ctx, b, s, f, start+0x9000, 0x1000, base+0x9000);
+	if (error) {
+		warnx("Failed to unmap igd BAR[0] hole on %x/%x/%x", b,s,f);
+		return error;
+	}
+
+	return 0;
+}
+
+static void
+deinit_igd_mmio(struct vmctx *ctx, struct passthru_dev *ptdev)
+{
+	struct pci_vdev *dev = ptdev->dev;
+
+	if (ptdev->igd_mmio.table_pages) {
+		pci_device_unmap_range(ptdev->phys_dev, ptdev->igd_mmio.table_pages, 0x200000);
+		ptdev->igd_mmio.table_pages = NULL;
+	}
+
+	/* fill the hole, then remove the whole mmio range from ept */
+	/*
+	if (vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[0].addr+0x9000, 0x1000,
+				ptdev->bar[0].addr+0x9000)) {
+		warnx("Failed to fill back the hole\n");
+	}
+	*/
+	/* or remove the 2 segments */
+	vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[0].addr, 0x9000,
+				ptdev->bar[0].addr);
+
+	vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[0].addr + 0xA000,
+				ptdev->bar[0].size - 0xA000,
+				ptdev->bar[0].addr + 0xA000);
+}
+
+
 static int
 cfginitbar(struct vmctx *ctx, struct passthru_dev *ptdev)
 {
@@ -633,11 +718,15 @@ cfginitbar(struct vmctx *ctx, struct passthru_dev *ptdev)
 			}
 		} else if (bartype != PCIBAR_IO) {
 			/* Map the physical BAR in the guest MMIO space */
-			error = vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
-				ptdev->sel.dev, ptdev->sel.func,
-				dev->bar[i].addr, dev->bar[i].size, base);
-			if (error)
-				return -1;
+			if ((PCI_BDF(dev->bus, dev->slot, dev->func) == PCI_BDF_GPU) && (i==0)) {
+				init_igd_mmio(ctx,ptdev,base);
+			} else {
+				error = vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
+						ptdev->sel.dev, ptdev->sel.func,
+						dev->bar[i].addr, dev->bar[i].size, base);
+				if (error)
+					return -1;
+			}
 		}
 
 		/*
@@ -972,6 +1061,10 @@ passthru_deinit(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 			i == ptdev_msix_table_bar(ptdev) ||
 			ptdev->bar[i].type == PCIBAR_IO)
 			continue;
+		if ((PCI_BDF(dev->bus, dev->slot, dev->func) == PCI_BDF_GPU) && (i == 0)) {
+			deinit_igd_mmio(ctx, ptdev);
+			continue;
+		}
 
 		vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
 				ptdev->sel.dev, ptdev->sel.func,
@@ -1011,15 +1104,39 @@ passthru_update_bar_map(struct vmctx *ctx, struct pci_vdev *dev,
 		orig_addr + dev->bar[idx].size > PCI_EMUL_MEMLIMIT64)
 		return;
 
-	vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
-			ptdev->sel.dev, ptdev->sel.func,
-			orig_addr, ptdev->bar[idx].size,
-			ptdev->bar[idx].addr);
 
-	vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
-			ptdev->sel.dev, ptdev->sel.func,
-			dev->bar[idx].addr, ptdev->bar[idx].size,
-			ptdev->bar[idx].addr);
+	if ((PCI_BDF(dev->bus, dev->slot, dev->func) == PCI_BDF_GPU) && (idx == 0)) {
+		vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				orig_addr, 0x9000,
+				ptdev->bar[idx].addr);
+
+		vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[idx].addr, 0x9000,
+				ptdev->bar[idx].addr);
+
+		vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				orig_addr+0xA000, ptdev->bar[idx].size - 0xA000,
+				ptdev->bar[idx].addr+0xA000);
+
+		vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[idx].addr + 0xA000, ptdev->bar[idx].size - 0xA000,
+				ptdev->bar[idx].addr + 0xA000);
+
+	} else {
+		vm_unmap_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				orig_addr, ptdev->bar[idx].size,
+				ptdev->bar[idx].addr);
+
+		vm_map_ptdev_mmio(ctx, ptdev->sel.bus,
+				ptdev->sel.dev, ptdev->sel.func,
+				dev->bar[idx].addr, ptdev->bar[idx].size,
+				ptdev->bar[idx].addr);
+	}
 }
 
 /* bind pin info for pass-through device */
@@ -1134,7 +1251,9 @@ passthru_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 
 	if (baridx == ptdev_msix_table_bar(ptdev)) {
 		msix_table_write(ptdev, offset, size, value);
-	} else {
+	} else if (baridx == 0) {
+		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
+	}else {
 		/* TODO: Add support for IO BAR of PTDev */
 		warnx("Passthru: PIO write not supported, ignored\n");
 	}
@@ -1151,7 +1270,12 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 
 	if (baridx == ptdev_msix_table_bar(ptdev)) {
 		val = msix_table_read(ptdev, offset, size);
+	} else if (baridx == 0) {
+		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
+		val = (uint64_t)(-1);
 	} else {
+
+		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
 		/* TODO: Add support for IO BAR of PTDev */
 		warnx("Passthru: PIO read not supported\n");
 		val = (uint64_t)(-1);
