@@ -326,6 +326,69 @@ cfginit_cap(struct vmctx *ctx, struct passthru_dev *ptdev)
 }
 
 static uint64_t
+igd_mmio_read(struct passthru_dev *ptdev, uint64_t offset, int size)
+{
+	uint8_t *src8;
+	uint16_t *src16;
+	uint32_t *src32;
+	uint64_t *src64;
+	uint64_t data;
+
+	switch (size) {
+	case 1:
+		src8 = (uint8_t *)(ptdev->igd_mmio.table_pages + offset );
+		data = *src8;
+		break;
+	case 2:
+		src16 = (uint16_t *)(ptdev->igd_mmio.table_pages + offset);
+		data = *src16;
+		break;
+	case 4:
+		src32 = (uint32_t *)(ptdev->igd_mmio.table_pages + offset);
+		data = *src32;
+		break;
+	case 8:
+		src64 = (uint64_t *)(ptdev->igd_mmio.table_pages + offset);
+		data = *src64;
+		break;
+	default:
+		return -1;
+
+	}
+	return data;
+}
+
+static void
+igd_mmio_write(struct passthru_dev *ptdev, uint64_t offset, int size, uint64_t data)
+{
+	uint8_t *dest8;
+	uint16_t *dest16;
+	uint32_t *dest32;
+	uint64_t *dest64;
+
+	switch (size) {
+	case 1:
+		dest8 = (uint8_t *)(ptdev->igd_mmio.table_pages + offset);
+		*dest8 = data;
+		break;
+	case 2:
+		dest16 = (uint16_t *)(ptdev->igd_mmio.table_pages + offset);
+		*dest16 = data;
+		break;
+	case 4:
+		dest32 = (uint32_t *)(ptdev->igd_mmio.table_pages + offset);
+		*dest32 = data;
+		break;
+	case 8:
+		dest64 = (uint64_t *)(ptdev->igd_mmio.table_pages + offset);
+		*dest64 = data;
+		break;
+	default:
+		break;
+	}
+}
+
+static uint64_t
 msix_table_read(struct passthru_dev *ptdev, uint64_t offset, int size)
 {
 	uint8_t *src8;
@@ -1253,6 +1316,7 @@ passthru_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 		msix_table_write(ptdev, offset, size, value);
 	} else if (baridx == 0) {
 		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
+		igd_mmio_write(ptdev, offset, size, value);
 	}else {
 		/* TODO: Add support for IO BAR of PTDev */
 		warnx("Passthru: PIO write not supported, ignored\n");
@@ -1272,7 +1336,8 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_vdev *dev, int baridx,
 		val = msix_table_read(ptdev, offset, size);
 	} else if (baridx == 0) {
 		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
-		val = (uint64_t)(-1);
+
+		val = igd_mmio_read(ptdev, offset, size);
 	} else {
 
 		pr_notice("passthru_read: bar= %d offset=0x%lx, size=%d\n", baridx, offset, size);
